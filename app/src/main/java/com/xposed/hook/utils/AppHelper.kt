@@ -2,6 +2,9 @@ package com.xposed.hook.utils
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.xposed.hook.App
 import com.xposed.hook.config.Constants
 import com.xposed.hook.config.PkgConfig
@@ -26,7 +29,7 @@ object AppHelper {
         val pm = App.current.packageManager
         val sp =
             App.current.getSharedPreferences(Constants.PREF_FILE_NAME, Context.MODE_PRIVATE)
-        val installedPackages = pm.getInstalledPackages(0)
+        val installedPackages = pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(0))
         for (installedPackage in installedPackages) {
             if (installedPackage.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM == 0) {
                 val app = AppInfo()

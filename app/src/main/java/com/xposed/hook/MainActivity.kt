@@ -12,8 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +54,7 @@ class MainActivity : AppCompatActivity() {
                     textState = it
                 }, textFieldValue = textState)
                 AppList(if (textState.text.isNotEmpty()) list.filter { info ->
-                    info.title.contains(textState.text, true)
+                    info.title!!.contains(textState.text, true)
                 } else list)
             }
         }
@@ -77,14 +75,14 @@ class MainActivity : AppCompatActivity() {
             Modifier
                 .fillMaxWidth()
                 .clickable {
-                    startActivity(Intent(this, RimetActivity::class.java).putExtra("appInfo", item))
+                    startActivity(Intent(this, DetailActivity::class.java).putExtra("appInfo", item))
                 }
                 .padding(12.dp, 12.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(item.icon.toBitmap(36.dpInPx, 36.dpInPx), item.title)
+            Image(item.icon!!.toBitmap(36.dpInPx, 36.dpInPx), item.title)
             Column(Modifier.padding(10.dp, 0.dp)) {
-                Text(item.title)
-                Text(item.packageName, Modifier.padding(0.dp, 3.dp, 0.dp, 0.dp), fontSize = 12.sp)
+                Text(item.title!!)
+                Text(item.packageName!!, Modifier.padding(0.dp, 3.dp, 0.dp, 0.dp), fontSize = 12.sp)
             }
         }
     }
@@ -135,16 +133,6 @@ class MainActivity : AppCompatActivity() {
                             style = MaterialTheme.typography.body1.copy(color = disableContentColor)
                         )
                     }
-                }
-                IconButton(onClick = {
-                    startActivity(
-                        Intent(this@MainActivity, LuckMoneySetting::class.java)
-                    )
-                }) {
-                    Icon(
-                        Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.wechat_hook)
-                    )
                 }
             }
         }

@@ -4,15 +4,12 @@ import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.provider.Settings
 import android.telephony.*
-import android.telephony.gsm.GsmCellLocation
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
@@ -38,26 +35,28 @@ import com.xposed.hook.entity.AppInfo
 import com.xposed.hook.theme.AppTheme
 import com.xposed.hook.utils.CellLocationHelper
 import com.xposed.hook.utils.SharedPreferencesHelper
+import java.util.concurrent.Executors
 
-class RimetActivity : AppCompatActivity() {
+class DetailActivity : AppCompatActivity() {
 
     private lateinit var sp: SharedPreferences
     private lateinit var appInfo: AppInfo
     private var isDingTalk = false
 
     private lateinit var tm: TelephonyManager
-    private lateinit var l: GsmCellLocation
     private lateinit var lm: LocationManager
-    private lateinit var gpsL: Location
 
     private val _currentLatitude = MutableLiveData("")
     private val _currentLongitude = MutableLiveData("")
     private val _currentLac = MutableLiveData("")
     private val _currentCid = MutableLiveData("")
 
+    private lateinit var cancellationSignal: CancellationSignal
+    private val executor = Executors.newFixedThreadPool(5);
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        appInfo = intent.getSerializableExtra("appInfo") as? AppInfo ?: return
+        appInfo = intent.getSerializableExtra("appInfo", AppInfo::class.java)!!
         title = appInfo.title
         isDingTalk = PkgConfig.pkg_dingtalk == appInfo.packageName
         tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
@@ -191,11 +190,11 @@ class RimetActivity : AppCompatActivity() {
                         onClick = {
                             sp.edit().putString(prefix + "latitude", latitude)
                                 .putString(prefix + "longitude", longitude)
-                                .putLong(prefix + "lac", parseLong(lac))
-                                .putLong(prefix + "cid", parseLong(cid))
+                                .putLong(prefix + "lac", lac.toLongOrNull() ?: -1)
+                                .putLong(prefix + "cid", cid.toLongOrNull() ?: -1)
                                 .putLong(prefix + "time", System.currentTimeMillis())
                                 .putBoolean(appInfo.packageName, isChecked)
-                                .commit()
+                                .apply()
                             SharedPreferencesHelper.makeWorldReadable(sp)
                             Toast.makeText(
                                 applicationContext,
@@ -233,59 +232,9 @@ class RimetActivity : AppCompatActivity() {
         }
     }
 
-    private fun parseLong(str: String): Long {
-        return try {
-            str.toLong()
-        } catch (e: Exception) {
-            -1
-        }
-    }
-
     override fun finish() {
         stopLocation()
         super.finish()
-    }
-
-    private var listener: PhoneStateListener = object : PhoneStateListener() {
-        override fun onCellLocationChanged(location: CellLocation) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return
-            if (location is GsmCellLocation) {
-                l = location
-                _currentLac.value = l.lac.toString()
-                _currentCid.value = l.cid.toString()
-            }
-        }
-
-        override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-            if (cellInfo == null || cellInfo.isEmpty()) return
-            when (val cellIdentity = cellInfo[0].cellIdentity) {
-                is CellIdentityGsm -> {
-                    _currentLac.value = cellIdentity.lac.toString()
-                    _currentCid.value = cellIdentity.cid.toString()
-                }
-                is CellIdentityLte -> {
-                    _currentLac.value = cellIdentity.tac.toString()
-                    _currentCid.value = cellIdentity.ci.toString()
-                }
-                is CellIdentityNr -> {
-                    _currentLac.value = cellIdentity.tac.toString()
-                    _currentCid.value = cellIdentity.nci.toString()
-                }
-            }
-        }
-    }
-
-    private var gpsListener: LocationListener = object : LocationListener {
-        override fun onLocationChanged(location: Location) {
-            gpsL = location
-            _currentLatitude.value = location.latitude.toString()
-            _currentLongitude.value = location.longitude.toString()
-        }
-
-        override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {}
-        override fun onProviderEnabled(provider: String) {}
-        override fun onProviderDisabled(provider: String) {}
     }
 
     private fun requestPermissions() {
@@ -328,16 +277,48 @@ class RimetActivity : AppCompatActivity() {
         ) {
             return
         }
-        lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, gpsListener, null)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            tm.listen(listener, PhoneStateListener.LISTEN_CELL_LOCATION)
-        } else {
-            tm.listen(listener, PhoneStateListener.LISTEN_CELL_INFO)
+
+        lm.getCurrentLocation(
+            LocationManager.GPS_PROVIDER,
+            CancellationSignal().apply { cancellationSignal = this },
+            executor
+        ) {
+            if (it != null) {
+                _currentLatitude.value = it.latitude.toString()
+                _currentLongitude.value = it.longitude.toString()
+            }
         }
+
+        tm.requestCellInfoUpdate(executor, object : TelephonyManager.CellInfoCallback() {
+            override fun onCellInfo(cellInfo: List<CellInfo?>) {
+                cellInfo.forEach {
+                    when (val it = it?.cellIdentity) {
+                        is CellIdentityGsm -> {
+                            _currentLac.postValue(it.lac.toString())
+                            _currentCid.postValue(it.cid.toString())
+                            return@forEach
+                        }
+
+                        is CellIdentityLte -> {
+                            _currentLac.postValue(it.tac.toString())
+                            _currentCid.postValue(it.ci.toString())
+                            return@forEach
+                        }
+
+                        is CellIdentityNr -> {
+                            _currentLac.postValue(it.tac.toString())
+                            _currentCid.postValue(it.nci.toString())
+                            return@forEach
+                        }
+
+                        else -> {}
+                    }
+                }
+            }
+        })
     }
 
     private fun stopLocation() {
-        tm.listen(listener, PhoneStateListener.LISTEN_NONE)
-        lm.removeUpdates(gpsListener)
+        cancellationSignal.cancel()
     }
 }

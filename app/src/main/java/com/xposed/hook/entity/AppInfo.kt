@@ -1,13 +1,13 @@
-package com.xposed.hook.entity;
+package com.xposed.hook.entity
 
-import android.graphics.drawable.Drawable;
+import android.graphics.drawable.Drawable
+import java.io.Serializable
 
-import java.io.Serializable;
+class AppInfo : Serializable {
+    var title: String? = null
+    var packageName: String? = null
+    var time: Long = 0
 
-public class AppInfo implements Serializable {
-
-    public String title;
-    public String packageName;
-    public long time;
-    public transient Drawable icon;
+    @Transient
+    var icon: Drawable? = null
 }

@@ -22,9 +22,16 @@ class Main : IXposedHookLoadPackage {
         Handler(Looper.getMainLooper()).post {
             try {
                 val packageName = loadPackageParam.packageName
-                val preferences = XSharedPreferences(BuildConfig.APPLICATION_ID, Constants.PREF_FILE_NAME)
-                if (!preferences.getBoolean(packageName, false))
+                val preferences =
+                    XSharedPreferences(BuildConfig.APPLICATION_ID, Constants.PREF_FILE_NAME)
+                preferences.makeWorldReadable()
+                if (!preferences.getBoolean(packageName, false)) {
+                    XposedBridge.log("$packageName :没有开启配置")
                     return@post
+                }
+
+                XposedBridge.log("$packageName：启动！！")
+
                 var defaultLatitude = Constants.DEFAULT_LATITUDE
                 var defaultLongitude = Constants.DEFAULT_LONGITUDE
                 if (PkgConfig.pkg_dingtalk == packageName) {

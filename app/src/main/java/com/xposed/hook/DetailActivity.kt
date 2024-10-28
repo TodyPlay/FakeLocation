@@ -284,8 +284,8 @@ class DetailActivity : AppCompatActivity() {
             executor
         ) {
             if (it != null) {
-                _currentLatitude.value = it.latitude.toString()
-                _currentLongitude.value = it.longitude.toString()
+                _currentLatitude.postValue(it.latitude.toString())
+                _currentLongitude.postValue(it.longitude.toString())
             }
         }
 
